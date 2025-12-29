@@ -1,0 +1,29 @@
+name: CICD
+
+on:
+  push:
+    branches:
+      - dev
+  pull_requests:
+    branches:
+      - dev
+
+      env:
+        APP_NAME_STAGING: dentistdev-staging
+        APP_NAME_PROD: dentistdev-prod
+
+        jobs:
+            ci:
+                name: Build, Lint, Test, Scan
+                runs-on: ubuntu-latest
+                environment: development
+
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: install dependencies for backend
+              working-directory: DentistDevOps/backend
+              with: 
+                node-version: ${{env.NODE.VESION}}
