@@ -17,7 +17,14 @@ var builder = WebApplication.CreateBuilder(args);
 // ------------------ EF Core ------------------
 var connection = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseMySql(connection, ServerVersion.AutoDetect(connection)));
+{
+    options.UseMySql(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        ServerVersion.AutoDetect(
+            builder.Configuration.GetConnectionString("DefaultConnection")
+        )
+    );
+});
 
 // ------------------ Identity ------------------
 builder.Services.AddIdentityCore<AppUser>(options =>

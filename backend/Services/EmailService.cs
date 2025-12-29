@@ -2,8 +2,8 @@ using System.Net;
 using backend.Domains.Interfaces;
 using MailKit.Net.Smtp;
 using MailKit.Security;
-using Microsoft.Extensions.Options;
 using MimeKit;
+using Microsoft.Extensions.Options;
 
 namespace backend.Services
 {
