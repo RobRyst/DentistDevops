@@ -128,6 +128,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Trivy image scan (SARIF)
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}:sha-${{ github.sha }}
@@ -137,6 +138,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Upload Trivy image to GitHub Security
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-image.sarif
