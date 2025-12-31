@@ -20,7 +20,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__DefaultConnection: "server=db;port=3306;database=DentistDevops;user=root;password=root;"
       Jwt__Issuer: "dentistdevops"
-      Jwt__Key: Secret
+      Jwt__Key: dev-secret
     ports:
       - "5077:8080"
     depends_on:

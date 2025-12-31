@@ -1,0 +1,76 @@
+services:
+  traefik:
+    image: traefik:v3.2
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: always
+
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: DentistDevops
+      MYSQL_USER: app
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - dbdata:/var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-p${MYSQL_ROOT_PASSWORD}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    restart: always
+
+  backend:
+    image: ghcr.io/${GHCR_OWNER}/${BACKEND_IMAGE}:${BACKEND_TAG}
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: "server=db;port=3306;database=DentistDevops;user=app;password=${MYSQL_PASSWORD};"
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Key: ${JWT_KEY}
+      MailtrapSmtp__Host: ${MAILTRAP_HOST}
+      MailtrapSmtp__Port: ${MAILTRAP_PORT}
+      MailtrapSmtp__User: ${MAILTRAP_USER}
+      MailtrapSmtp__Password: ${MAILTRAP_PASSWORD}
+      MailtrapSmtp__FromEmail: ${MAIL_FROM_EMAIL}
+      MailtrapSmtp__FromName: ${MAIL_FROM_NAME}
+      Twilio__AccountSid: ${TWILIO_ACCOUNT_SID}
+      Twilio__AuthToken: ${TWILIO_AUTH_TOKEN}
+      Twilio__FromNumber: ${TWILIO_FROM_NUMBER}
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=PathPrefix(`/api`) || PathPrefix(`/swagger`)"
+      - "traefik.http.routers.backend.entrypoints=web"
+      - "traefik.http.services.backend.loadbalancer.server.port=8080"
+    restart: always
+
+  frontend:
+    image: ghcr.io/${GHCR_OWNER}/${FRONTEND_IMAGE}:${FRONTEND_TAG}
+    depends_on:
+      - backend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+    restart: always
+
+volumes:
+  dbdata:
