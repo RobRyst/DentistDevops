@@ -13,17 +13,21 @@ using backend.Domains.Interfaces;
 using backend.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.ListenAnyIP(8080);
+});
 
-// ------------------ EF Core ------------------
-var connection = builder.Configuration.GetConnectionString("DefaultConnection");
+// ------------------ EF Core (MySQL) ------------------
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    options.UseMySql(
-        builder.Configuration.GetConnectionString("DefaultConnection"),
-        ServerVersion.AutoDetect(
-            builder.Configuration.GetConnectionString("DefaultConnection")
-        )
-    );
+    var cs = builder.Configuration.GetConnectionString("DefaultConnection");
+    var serverVersion = new MySqlServerVersion(new Version(8, 0, 36));
+
+    options.UseMySql(cs, serverVersion, mySqlOptions =>
+    {
+        mySqlOptions.EnableRetryOnFailure();
+    });
 });
 
 // ------------------ Identity ------------------
@@ -42,7 +46,6 @@ builder.Services.AddIdentityCore<AppUser>(options =>
 .AddRoles<IdentityRole>()
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddSignInManager<SignInManager<AppUser>>();
-
 JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 
 // ------------------ Authentication (JWT) ------------------
@@ -70,19 +73,20 @@ builder.Services.AddAuthorization();
 // ------------------ App services ------------------
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<TokenService>();
-
 builder.Services.AddHttpContextAccessor();
 
-// ------------------ Mailtrap (Email via SMTP) ------------------
+// ------------------ Mailtrap + 2FA ------------------
 builder.Services.Configure<MailTrapOptions>(builder.Configuration.GetSection("MailtrapSmtp"));
 builder.Services.AddScoped<IEmailSender, EmailService>();
 builder.Services.AddScoped<TwoFactorAuthService>();
+
+// ------------------ Twilio SMS / Dev sender fallback ------------------
 builder.Services.Configure<TwilioOptions>(builder.Configuration.GetSection("Twilio"));
 builder.Services.AddHostedService<AppointmentReminderService>();
 
 bool twilioConfigured =
     !string.IsNullOrWhiteSpace(builder.Configuration["Twilio:AccountSid"]) &&
-    !string.IsNullOrWhiteSpace(builder.Configuration["Twilio:AuthToken"])  &&
+    !string.IsNullOrWhiteSpace(builder.Configuration["Twilio:AuthToken"]) &&
     !string.IsNullOrWhiteSpace(builder.Configuration["Twilio:FromNumber"]);
 
 if (twilioConfigured)
@@ -93,7 +97,6 @@ else
 {
     builder.Services.AddSingleton<ITextMessageService, DevSmsSender>();
 }
-
 
 // ------------------ CORS ------------------
 builder.Services.AddCors(options =>
@@ -107,8 +110,9 @@ builder.Services.AddCors(options =>
     });
 });
 
-// ------------------ Swagger & Controllers ------------------
+// ------------------ Controllers + Health + Swagger ------------------
 builder.Services.AddControllers();
+builder.Services.AddHealthChecks();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -124,78 +128,97 @@ builder.Services.AddSwaggerGen(c =>
     });
     c.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
-        { new OpenApiSecurityScheme { Reference = new OpenApiReference
-            { Type = ReferenceType.SecurityScheme, Id = "Bearer" } }, Array.Empty<string>() }
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+            },
+            Array.Empty<string>()
+        }
     });
 });
 
 var app = builder.Build();
-using (var scope = app.Services.CreateScope())
+var enableDevStartupDb = builder.Configuration.GetValue("EnableDevStartupDb", true);
+
+if (app.Environment.IsDevelopment() && enableDevStartupDb)
 {
+    using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    var osloNow = TimeZoneInfo.ConvertTime(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Central European Standard Time"));
-    static DateTime Day(DateTime date, int hour, int minutes) => new(date.Year, date.Month, date.Day, hour, minutes, 0, DateTimeKind.Local);
 
-    var todayLocal = osloNow.Date;
-    var blocks = new[]
+    try
     {
-        (start: Day(todayLocal, 9, 0),  end: Day(todayLocal, 12, 0)),
-        (start: Day(todayLocal, 13, 0), end: Day(todayLocal, 16, 0)),
-        (start: Day(todayLocal.AddDays(1), 9, 0),  end: Day(todayLocal.AddDays(1), 12, 0)),
-        (start: Day(todayLocal.AddDays(1), 13, 0), end: Day(todayLocal.AddDays(1), 16, 0)),
-    };
+        var osloNow = TimeZoneInfo.ConvertTime(
+            DateTime.UtcNow,
+            TimeZoneInfo.FindSystemTimeZoneById("Central European Standard Time")
+        );
 
-    foreach (var (start, end) in blocks)
-    {
-        var startUtc = start.ToUniversalTime();
-        var endUtc   = end.ToUniversalTime();
+        static DateTime Day(DateTime date, int hour, int minutes)
+            => new(date.Year, date.Month, date.Day, hour, minutes, 0, DateTimeKind.Local);
 
-        bool exists = await db.AvailabilitySlots.AnyAsync(slot =>
-            slot.ProviderId == 1 && slot.StartTime == startUtc && slot.EndTime == endUtc);
-        if (!exists)
+        var todayLocal = osloNow.Date;
+        var blocks = new[]
         {
-            db.AvailabilitySlots.Add(new AvailabilitySlot
+            (start: Day(todayLocal, 9, 0),  end: Day(todayLocal, 12, 0)),
+            (start: Day(todayLocal, 13, 0), end: Day(todayLocal, 16, 0)),
+            (start: Day(todayLocal.AddDays(1), 9, 0),  end: Day(todayLocal.AddDays(1), 12, 0)),
+            (start: Day(todayLocal.AddDays(1), 13, 0), end: Day(todayLocal.AddDays(1), 16, 0)),
+        };
+
+        foreach (var (start, end) in blocks)
+        {
+            var startUtc = start.ToUniversalTime();
+            var endUtc = end.ToUniversalTime();
+
+            bool exists = await db.AvailabilitySlots.AnyAsync(slot =>
+                slot.ProviderId == 1 &&
+                slot.StartTime == startUtc &&
+                slot.EndTime == endUtc);
+
+            if (!exists)
             {
-                ProviderId = 1,
-                StartTime = startUtc,
-                EndTime = endUtc
-            });
+                db.AvailabilitySlots.Add(new AvailabilitySlot
+                {
+                    ProviderId = 1,
+                    StartTime = startUtc,
+                    EndTime = endUtc
+                });
+            }
         }
-    }
-    await db.SaveChangesAsync();
-}
 
-// ------------------ Seed roles ------------------
-using (var scope = app.Services.CreateScope())
-{
-    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
-    var normalizer  = scope.ServiceProvider.GetRequiredService<ILookupNormalizer>();
+        await db.SaveChangesAsync();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+        var normalizer = scope.ServiceProvider.GetRequiredService<ILookupNormalizer>();
 
-    var allUsers = await userManager.Users.ToListAsync();
+        var allUsers = await userManager.Users.ToListAsync();
 
-    foreach (var user in allUsers)
-    {
-        if (string.IsNullOrWhiteSpace(user.UserName))
-            user.UserName = user.Email ?? user.UserName ?? "";
-
-        var normEmail = string.IsNullOrWhiteSpace(user.Email) ? null : normalizer.NormalizeEmail(user.Email);
-        var normUser  = string.IsNullOrWhiteSpace(user.UserName) ? null : normalizer.NormalizeName(user.UserName);
-
-        bool changed = false;
-        if (user.NormalizedEmail != normEmail) { user.NormalizedEmail = normEmail; changed = true; }
-        if (user.NormalizedUserName != normUser) { user.NormalizedUserName = normUser; changed = true; }
-
-        if (changed)
+        foreach (var user in allUsers)
         {
-            var result = await userManager.UpdateAsync(user);
-            if (!result.Succeeded)
+            if (string.IsNullOrWhiteSpace(user.UserName))
+                user.UserName = user.Email ?? user.UserName ?? "";
+
+            var normEmail = string.IsNullOrWhiteSpace(user.Email) ? null : normalizer.NormalizeEmail(user.Email);
+            var normUser = string.IsNullOrWhiteSpace(user.UserName) ? null : normalizer.NormalizeName(user.UserName);
+
+            bool changed = false;
+            if (user.NormalizedEmail != normEmail) { user.NormalizedEmail = normEmail; changed = true; }
+            if (user.NormalizedUserName != normUser) { user.NormalizedUserName = normUser; changed = true; }
+
+            if (changed)
             {
-                
+                await userManager.UpdateAsync(user);
             }
         }
     }
+    catch (Exception ex)
+    {
+        // Dev-only: do not crash app if DB is missing
+        app.Logger.LogWarning(ex, "Dev startup DB tasks failed (DB may be unavailable). Continuing startup.");
+    }
 }
 
+// ------------------ Swagger (Development only) ------------------
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -205,6 +228,23 @@ if (app.Environment.IsDevelopment())
 app.UseCors("CorsPolicy");
 app.UseAuthentication();
 app.UseAuthorization();
+
 app.MapControllers();
+
+app.MapHealthChecks("/healthz").AllowAnonymous();
+app.MapGet("/readyz", async (IServiceProvider sp) =>
+{
+    try
+    {
+        using var scope = sp.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var ok = await db.Database.CanConnectAsync();
+        return ok ? Results.Ok(new { status = "ready" }) : Results.StatusCode(503);
+    }
+    catch
+    {
+        return Results.StatusCode(503);
+    }
+}).AllowAnonymous();
 
 app.Run();
