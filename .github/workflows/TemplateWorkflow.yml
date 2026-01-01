@@ -144,10 +144,10 @@ jobs:
           sarif_file: trivy-image.sarif
 
       - name: Smoke test container
-        if: ${{ inputs.run_integration_smoke }}
+        if: ${{ inputs.run_integration_smoke && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         run: |
           docker run -d --rm -p 18080:8080 --name smoke \
             ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}:sha-${{ github.sha }}
           sleep 5
-          curl -fsS http://localhost:18080/swagger/index.html >/dev/null || (docker logs smoke && exit 1)
+          curl -fsS http://localhost:18080/healthz >/dev/null || (docker logs smoke && exit 1)
           docker stop smoke

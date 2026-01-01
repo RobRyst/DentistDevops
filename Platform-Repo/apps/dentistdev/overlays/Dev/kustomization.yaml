@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+patches:
+  - target:
+      kind: Ingress
+      name: dentistdev
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: dentistdev-dev.local
+
+images:
+  - name: ghcr.io/RobRyst/dentistdev-backend
+    newTag: sha-PLACEHOLDER
+  - name: ghcr.io/RobRyst/dentistdev-frontend
+    newTag: sha-PLACEHOLDER

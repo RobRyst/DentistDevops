@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dentistdev
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: dentistdev.local
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: dentistdev-backend
+                port:
+                  number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dentistdev-frontend
+                port:
+                  number: 80
