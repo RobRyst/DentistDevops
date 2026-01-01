@@ -26,11 +26,10 @@ on:
 
 permissions:
   contents: read
-  packages: write
-  security-events: write
 
 jobs:
   ci:
+    name: CI (build/test/scan)
     runs-on: ubuntu-latest
 
     steps:
@@ -79,7 +78,7 @@ jobs:
         run: |
           npm audit --audit-level=high || true
 
-      - name: Trivy FS scan
+      - name: Trivy FS scan (no upload on PR)
         uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: fs
@@ -88,10 +87,27 @@ jobs:
           output: trivy-fs.sarif
           severity: CRITICAL,HIGH
 
-      - name: Upload Trivy FS to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Upload Trivy FS artifact (optional)
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: trivy-fs.sarif
+          name: trivy-fs-${{ inputs.service_name }}
+          path: trivy-fs.sarif
+          if-no-files-found: error
+
+  release:
+    name: Release (push image + security reports)
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: [ci]
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -114,21 +130,33 @@ jobs:
           tags: |
             type=sha
             type=ref,event=branch
-            type=ref,event=pr
 
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: ${{ inputs.context }}
           file: ${{ inputs.dockerfile }}
-          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Trivy FS scan (SARIF)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-fs.sarif
+          severity: CRITICAL,HIGH
+
+      - name: Upload Trivy FS to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-fs.sarif
+
       - name: Trivy image scan (SARIF)
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}:sha-${{ github.sha }}
@@ -138,13 +166,12 @@ jobs:
           ignore-unfixed: true
 
       - name: Upload Trivy image to GitHub Security
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-image.sarif
 
       - name: Smoke test container
-        if: ${{ inputs.run_integration_smoke && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        if: ${{ inputs.run_integration_smoke }}
         run: |
           docker run -d --rm -p 18080:8080 --name smoke \
             ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}:sha-${{ github.sha }}
