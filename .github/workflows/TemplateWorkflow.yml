@@ -220,12 +220,21 @@ jobs:
         with:
           sarif_file: trivy-image.sarif
 
+<<<<<<< HEAD
       - name: Smoke test container (/healthz)
         if: ${{ inputs.run_integration_smoke && inputs.service_name == 'backend' }}
+=======
+      - name: Smoke test container
+        if: ${{ inputs.run_integration_smoke && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+>>>>>>> 77dd028 (Devops / CICD setup progress)
         run: |
           docker run -d --rm --name smoke --network host \
             -e ASPNETCORE_URLS=http://0.0.0.0:8080 \
             ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}:sha-${{ github.sha }}
           sleep 5
+<<<<<<< HEAD
           curl -fsS http://localhost:8080/healthz >/dev/null || (docker logs smoke && exit 1)
+=======
+          curl -fsS http://localhost:18080/healthz >/dev/null || (docker logs smoke && exit 1)
+>>>>>>> 77dd028 (Devops / CICD setup progress)
           docker stop smoke
