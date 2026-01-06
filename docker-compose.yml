@@ -1,39 +1,93 @@
+version: "3.8"
+
 services:
-  db:
-    image: mysql:8.4
+  mysql:
+    image: mysql:8.0
+    container_name: dentist-mysql
+    restart: unless-stopped
     environment:
-      MYSQL_DATABASE: DentistDevops
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-devpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-DentistDevops}
     ports:
       - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/Infrastructure/Data/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - dentist-network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-u",
+          "root",
+          "-p${MYSQL_ROOT_PASSWORD:-devpassword}",
+        ]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 5
 
   backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
+    container_name: dentist-backend
+    restart: unless-stopped
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__DefaultConnection: "server=db;port=3306;database=DentistDevops;user=root;password=root;"
-      Jwt__Issuer: "dentistdevops"
-      Jwt__Key: dev-secret
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Development}
+      - ConnectionStrings__DefaultConnection=server=mysql;port=3306;database=${MYSQL_DATABASE:-DentistDevops};user=root;password=${MYSQL_ROOT_PASSWORD:-devpassword}
+      - Jwt__Key=${JWT_KEY:-THIS_IS_A_LONG_JWT_TOKEN_THAT_IS_OVER_32_CHARACTERS}
+      - Jwt__Issuer=${JWT_ISSUER:-dentistdevops}
+      - Jwt__ExpireMinutes=${JWT_EXPIRE_MINUTES:-60}
+      - MailtrapSmtp__Host=${MAILTRAP_HOST:-}
+      - MailtrapSmtp__Port=${MAILTRAP_PORT:-587}
+      - MailtrapSmtp__Username=${MAILTRAP_USERNAME:-}
+      - MailtrapSmtp__Password=${MAILTRAP_PASSWORD:-}
+      - Twilio__AccountSid=${TWILIO_ACCOUNT_SID:-}
+      - Twilio__AuthToken=${TWILIO_AUTH_TOKEN:-}
+      - Twilio__FromNumber=${TWILIO_FROM_NUMBER:-}
     ports:
-      - "5077:8080"
+      - "5000:8080"
     depends_on:
-      db:
+      mysql:
         condition: service_healthy
+    networks:
+      - dentist-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/swagger/index.html"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   frontend:
     build:
       context: .
       dockerfile: frontend/Dockerfile
-    environment:
-      - VITE_API_BASE_URL=http://localhost:5077
+      args:
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:5000}
+    container_name: dentist-frontend
+    restart: unless-stopped
     ports:
-      - "5173:80"
+      - "3000:80"
     depends_on:
       - backend
+    networks:
+      - dentist-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  dentist-network:
+    driver: bridge
