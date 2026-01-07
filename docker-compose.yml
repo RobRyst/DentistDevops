@@ -6,8 +6,13 @@ services:
     container_name: dentist-mysql
     restart: unless-stopped
     environment:
+<<<<<<< HEAD
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-devpassword}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-DentistDevops}
+=======
+      MYSQL_DATABASE: DentistDevops
+      MYSQL_ROOT_PASSWORD:
+>>>>>>> feature/Ticket-1-CI/CD-setup
     ports:
       - "3306:3306"
     volumes:
@@ -16,6 +21,7 @@ services:
     networks:
       - dentist-network
     healthcheck:
+<<<<<<< HEAD
       test:
         [
           "CMD",
@@ -27,6 +33,9 @@ services:
           "root",
           "-p${MYSQL_ROOT_PASSWORD:-devpassword}",
         ]
+=======
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p"]
+>>>>>>> feature/Ticket-1-CI/CD-setup
       interval: 10s
       timeout: 5s
       retries: 5
@@ -38,6 +47,7 @@ services:
     container_name: dentist-backend
     restart: unless-stopped
     environment:
+<<<<<<< HEAD
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Development}
       - ConnectionStrings__DefaultConnection=server=mysql;port=3306;database=${MYSQL_DATABASE:-DentistDevops};user=root;password=${MYSQL_ROOT_PASSWORD:-devpassword}
       - Jwt__Key=${JWT_KEY:-THIS_IS_A_LONG_JWT_TOKEN_THAT_IS_OVER_32_CHARACTERS}
@@ -50,6 +60,12 @@ services:
       - Twilio__AccountSid=${TWILIO_ACCOUNT_SID:-}
       - Twilio__AuthToken=${TWILIO_AUTH_TOKEN:-}
       - Twilio__FromNumber=${TWILIO_FROM_NUMBER:-}
+=======
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: "server=db;port=3306;database=DentistDevops;user=root;password=;"
+      Jwt__Issuer: "dentistdevops"
+      Jwt__Key: dev-secret
+>>>>>>> feature/Ticket-1-CI/CD-setup
     ports:
       - "5000:8080"
     depends_on:

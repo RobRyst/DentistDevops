@@ -26,11 +26,10 @@ on:
 
 permissions:
   contents: read
-  packages: write
-  security-events: write
 
 jobs:
   ci:
+    name: CI (build/test/scan)
     runs-on: ubuntu-latest
 
     steps:
@@ -79,7 +78,7 @@ jobs:
         run: |
           npm audit --audit-level=high || true
 
-      - name: Trivy FS scan
+      - name: Trivy FS scan (no upload on PR)
         uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: fs
@@ -88,10 +87,43 @@ jobs:
           output: trivy-fs.sarif
           severity: CRITICAL,HIGH
 
-      - name: Upload Trivy FS to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Upload Trivy FS artifact
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: trivy-fs.sarif
+          name: trivy-fs-${{ inputs.service_name }}
+          path: trivy-fs.sarif
+          if-no-files-found: error
+
+  release:
+    name: Release (push image + security reports)
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: [ci]
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: DentistDevops
+          MYSQL_USER: app
+          MYSQL_PASSWORD: apppass
+          MYSQL_ROOT_PASSWORD: rootpass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -prootpass"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=30
+
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -114,7 +146,6 @@ jobs:
           tags: |
             type=sha
             type=ref,event=branch
-            type=ref,event=pr
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -126,6 +157,52 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Integration test (MySQL + /readyz)
+        if: ${{ inputs.service_name == 'backend' }}
+        run: |
+          echo "Waiting for MySQL health..."
+          for i in $(seq 1 60); do
+            docker run --rm --network host mysql:8.4 \
+              mysqladmin ping -h 127.0.0.1 -prootpass && break
+            sleep 2
+          done
+
+          echo "Starting backend container (integration)..."
+          docker run -d --rm --name it-backend --network host \
+            -e ASPNETCORE_URLS=http://0.0.0.0:8080 \
+            -e ASPNETCORE_ENVIRONMENT=Production \
+            -e ConnectionStrings__DefaultConnection="server=127.0.0.1;port=3306;database=DentistDevops;user=app;password=apppass;" \
+            -e Jwt__Issuer="dentistdevops" \
+            -e Jwt__Key="THIS_IS_A_LONG_JWT_TOKEN_THAT_IS_OVER_32_CHARACTERS" \
+            ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}:sha-${{ github.sha }}
+
+          echo "Probing /readyz..."
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/readyz >/dev/null; then
+              echo "OK: /readyz is healthy (DB connectivity confirmed)."
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "ERROR: /readyz never became healthy."
+          docker logs it-backend || true
+          exit 1
+
+      - name: Trivy FS scan (SARIF)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-fs.sarif
+          severity: CRITICAL,HIGH
+
+      - name: Upload Trivy FS to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-fs.sarif
 
       - name: Trivy image scan (SARIF)
         uses: aquasecurity/trivy-action@0.28.0
@@ -141,11 +218,12 @@ jobs:
         with:
           sarif_file: trivy-image.sarif
 
-      - name: Smoke test container
-        if: ${{ inputs.run_integration_smoke }}
+      - name: Smoke test container (/healthz)
+        if: ${{ inputs.run_integration_smoke && inputs.service_name == 'backend' }}
         run: |
-          docker run -d --rm -p 18080:8080 --name smoke \
+          docker run -d --rm --name smoke --network host \
+            -e ASPNETCORE_URLS=http://0.0.0.0:8080 \
             ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}:sha-${{ github.sha }}
           sleep 5
-          curl -fsS http://localhost:18080/swagger/index.html >/dev/null || (docker logs smoke && exit 1)
+          curl -fsS http://localhost:8080/healthz >/dev/null || (docker logs smoke && exit 1)
           docker stop smoke

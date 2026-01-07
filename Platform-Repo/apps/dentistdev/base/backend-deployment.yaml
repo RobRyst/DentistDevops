@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dentistdev-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dentistdev-backend
+  template:
+    metadata:
+      labels:
+        app: dentistdev-backend
+    spec:
+      containers:
+        - name: backend
+          image: ghcr.io/RobRyst/dentistdev-backend:sha-PLACEHOLDER
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Production"
+            - name: ConnectionStrings__DefaultConnection
+              valueFrom:
+                secretKeyRef:
+                  name: dentistdev-secrets
+                  key: mysql-connection-string
+            - name: Jwt__Issuer
+              valueFrom:
+                secretKeyRef:
+                  name: dentistdev-secrets
+                  key: jwt-issuer
+            - name: Jwt__Key
+              valueFrom:
+                secretKeyRef:
+                  name: dentistdev-secrets
+                  key: jwt-key
+
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 6
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
