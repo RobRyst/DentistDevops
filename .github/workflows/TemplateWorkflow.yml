@@ -26,6 +26,8 @@ on:
 
 permissions:
   contents: read
+  security-events: write
+  packages: write
 
 jobs:
   ci:
@@ -36,6 +38,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ---------- Backend (.NET) ----------
       - name: Setup .NET
         if: ${{ inputs.service_name == 'backend' }}
         uses: actions/setup-dotnet@v4
@@ -56,6 +59,7 @@ jobs:
         run: |
           dotnet list package --vulnerable --include-transitive || true
 
+      # ---------- Frontend (Node) ----------
       - name: Setup Node
         if: ${{ inputs.service_name == 'frontend' }}
         uses: actions/setup-node@v4
@@ -78,7 +82,8 @@ jobs:
         run: |
           npm audit --audit-level=high || true
 
-      - name: Trivy FS scan (no upload on PR)
+      # ---------- Security scan (filesystem) ----------
+      - name: Trivy FS scan (SARIF)
         uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: fs
@@ -92,13 +97,17 @@ jobs:
         with:
           sarif_file: trivy-fs.sarif
 
+      # ---------- Build & Push (only on main push) ----------
       - name: Set up QEMU
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Buildx
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: docker/setup-buildx-action@v3
 
       - name: Login to GHCR
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -106,6 +115,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Docker metadata
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -115,6 +125,7 @@ jobs:
             type=ref,event=branch
 
       - name: Build and push
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: docker/build-push-action@v6
         with:
           context: ${{ inputs.context }}
@@ -125,7 +136,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # ---------- Security scan (image) ----------
       - name: Trivy image scan (SARIF)
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}:sha-${{ github.sha }}
@@ -135,24 +148,18 @@ jobs:
           ignore-unfixed: true
 
       - name: Upload Trivy image to GitHub Security
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-image.sarif
 
-<<<<<<< HEAD
+      # ---------- Smoke test (backend only) ----------
       - name: Smoke test container (/healthz)
-        if: ${{ inputs.run_integration_smoke && inputs.service_name == 'backend' }}
-=======
-      - name: Smoke test container
-        if: ${{ inputs.run_integration_smoke && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        if: ${{ inputs.run_integration_smoke && inputs.service_name == 'backend' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         run: |
           docker run -d --rm --name smoke --network host \
             -e ASPNETCORE_URLS=http://0.0.0.0:8080 \
             ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}:sha-${{ github.sha }}
           sleep 5
-<<<<<<< HEAD
           curl -fsS http://localhost:8080/healthz >/dev/null || (docker logs smoke && exit 1)
-=======
-          curl -fsS http://localhost:18080/healthz >/dev/null || (docker logs smoke && exit 1)
->>>>>>> 77dd028 (Devops / CICD setup progress)
           docker stop smoke
