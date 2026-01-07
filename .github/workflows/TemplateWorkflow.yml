@@ -87,7 +87,7 @@ jobs:
           output: trivy-fs.sarif
           severity: CRITICAL,HIGH
 
-      - name: Upload Trivy FS artifact (optional)
+      - name: Upload Trivy FS artifact
         uses: actions/upload-artifact@v4
         with:
           name: trivy-fs-${{ inputs.service_name }}
@@ -95,6 +95,11 @@ jobs:
           if-no-files-found: error
 
   release:
+    name: Release (push image + security reports)
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: [ci]
+    runs-on: ubuntu-latest
+
     services:
       mysql:
         image: mysql:8.4
@@ -110,11 +115,6 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=30
-
-    name: Release (push image + security reports)
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-    needs: [ci]
-    runs-on: ubuntu-latest
 
     permissions:
       contents: read
@@ -161,14 +161,14 @@ jobs:
       - name: Integration test (MySQL + /readyz)
         if: ${{ inputs.service_name == 'backend' }}
         run: |
-          echo "Waiting for MySQL to become healthy..."
+          echo "Waiting for MySQL health..."
           for i in $(seq 1 60); do
             docker run --rm --network host mysql:8.4 \
               mysqladmin ping -h 127.0.0.1 -prootpass && break
             sleep 2
           done
 
-          echo "Starting backend container against MySQL..."
+          echo "Starting backend container (integration)..."
           docker run -d --rm --name it-backend --network host \
             -e ASPNETCORE_URLS=http://0.0.0.0:8080 \
             -e ASPNETCORE_ENVIRONMENT=Production \
@@ -177,16 +177,16 @@ jobs:
             -e Jwt__Key="THIS_IS_A_LONG_JWT_TOKEN_THAT_IS_OVER_32_CHARACTERS" \
             ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}:sha-${{ github.sha }}
 
-          echo "Probing /readyz until ready..."
+          echo "Probing /readyz..."
           for i in $(seq 1 30); do
             if curl -fsS http://localhost:8080/readyz >/dev/null; then
-              echo "Backend is ready (DB connectivity OK)."
+              echo "OK: /readyz is healthy (DB connectivity confirmed)."
               exit 0
             fi
             sleep 2
           done
 
-          echo "Backend did not become ready."
+          echo "ERROR: /readyz never became healthy."
           docker logs it-backend || true
           exit 1
 
@@ -218,11 +218,12 @@ jobs:
         with:
           sarif_file: trivy-image.sarif
 
-      - name: Smoke test container
-        if: ${{ inputs.run_integration_smoke }}
+      - name: Smoke test container (/healthz)
+        if: ${{ inputs.run_integration_smoke && inputs.service_name == 'backend' }}
         run: |
-          docker run -d --rm -p 18080:8080 --name smoke \
+          docker run -d --rm --name smoke --network host \
+            -e ASPNETCORE_URLS=http://0.0.0.0:8080 \
             ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}:sha-${{ github.sha }}
           sleep 5
-          curl -fsS http://localhost:18080/healthz >/dev/null || (docker logs smoke && exit 1)
+          curl -fsS http://localhost:8080/healthz >/dev/null || (docker logs smoke && exit 1)
           docker stop smoke
