@@ -95,6 +95,22 @@ jobs:
           if-no-files-found: error
 
   release:
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: DentistDevops
+          MYSQL_USER: app
+          MYSQL_PASSWORD: apppass
+          MYSQL_ROOT_PASSWORD: rootpass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -prootpass"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=30
+
     name: Release (push image + security reports)
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     needs: [ci]
@@ -141,6 +157,38 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Integration test (MySQL + /readyz)
+        if: ${{ inputs.service_name == 'backend' }}
+        run: |
+          echo "Waiting for MySQL to become healthy..."
+          for i in $(seq 1 60); do
+            docker run --rm --network host mysql:8.4 \
+              mysqladmin ping -h 127.0.0.1 -prootpass && break
+            sleep 2
+          done
+
+          echo "Starting backend container against MySQL..."
+          docker run -d --rm --name it-backend --network host \
+            -e ASPNETCORE_URLS=http://0.0.0.0:8080 \
+            -e ASPNETCORE_ENVIRONMENT=Production \
+            -e ConnectionStrings__DefaultConnection="server=127.0.0.1;port=3306;database=DentistDevops;user=app;password=apppass;" \
+            -e Jwt__Issuer="dentistdevops" \
+            -e Jwt__Key="THIS_IS_A_LONG_JWT_TOKEN_THAT_IS_OVER_32_CHARACTERS" \
+            ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}:sha-${{ github.sha }}
+
+          echo "Probing /readyz until ready..."
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/readyz >/dev/null; then
+              echo "Backend is ready (DB connectivity OK)."
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "Backend did not become ready."
+          docker logs it-backend || true
+          exit 1
 
       - name: Trivy FS scan (SARIF)
         uses: aquasecurity/trivy-action@0.28.0
