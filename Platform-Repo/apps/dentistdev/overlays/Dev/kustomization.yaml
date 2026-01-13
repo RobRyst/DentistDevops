@@ -14,7 +14,7 @@ patches:
         value: dentistdev-dev.local
 
 images:
-  - name: ghcr.io/RobRyst/dentistdev-backend
+  - name: ghcr.io/robryst/dentistdev-backend
     newTag: sha-PLACEHOLDER
-  - name: ghcr.io/RobRyst/dentistdev-frontend
+  - name: ghcr.io/robryst/dentistdev-frontend
     newTag: sha-PLACEHOLDER
