@@ -92,10 +92,43 @@ jobs:
           output: trivy-fs.sarif
           severity: CRITICAL,HIGH
 
-      - name: Upload Trivy FS to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Upload Trivy FS artifact
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: trivy-fs.sarif
+          name: trivy-fs-${{ inputs.service_name }}
+          path: trivy-fs.sarif
+          if-no-files-found: error
+
+  release:
+    name: Release (push image + security reports)
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: [ci]
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: DentistDevops
+          MYSQL_USER: app
+          MYSQL_PASSWORD: apppass
+          MYSQL_ROOT_PASSWORD: rootpass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -prootpass"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=30
+
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       # ---------- Build & Push (only on main push) ----------
       - name: Set up QEMU
