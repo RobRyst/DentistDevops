@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: ghcr.io/RobRyst/dentistdev-frontend:sha-PLACEHOLDER
+          image: ghcr.io/robryst/dentistdev-frontend:sha-PLACEHOLDER
           ports:
             - containerPort: 80
               name: http
