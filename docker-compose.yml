@@ -3,11 +3,11 @@ services:
     image: mysql:8.4
     environment:
       MYSQL_DATABASE: DentistDevops
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_PASSWORD:
     ports:
       - "3306:3306"
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -18,7 +18,7 @@ services:
       dockerfile: backend/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__DefaultConnection: "server=db;port=3306;database=DentistDevops;user=root;password=root;"
+      ConnectionStrings__DefaultConnection: "server=db;port=3306;database=DentistDevops;user=root;password=;"
       Jwt__Issuer: "dentistdevops"
       Jwt__Key: dev-secret
     ports:
