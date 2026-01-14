@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dentistdev-dev
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: "https://github.com/RobRyst/DentistDevops.git"
+    targetRevision: "main"
+    path: "Platform-Repo/Clusters/Dev"
+
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: "dentistdev"
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
