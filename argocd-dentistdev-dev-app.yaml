@@ -9,7 +9,7 @@ spec:
   source:
     repoURL: "https://github.com/RobRyst/DentistDevops.git"
     targetRevision: "main"
-    path: "Platform-Repo/Clusters/Dev"
+    path: "Platform-Repo/Clusters/dev"
 
   destination:
     server: "https://kubernetes.default.svc"
