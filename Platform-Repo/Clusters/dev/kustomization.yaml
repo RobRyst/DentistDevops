@@ -1,0 +1,5 @@
+images:
+  - name: ghcr.io/robryst/dentistdev-backend
+    newTag: sha-30b054aa2919fdea1ebc5a987343615ab7976fba
+  - name: ghcr.io/robryst/dentistdev-frontend
+    newTag: sha-30b054aa2919fdea1ebc5a987343615ab7976fba
