@@ -23,27 +23,25 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push backend image
-        id: backend
         run: |
-          IMAGE_TAG="ghcr.io/robryst/dentistdev-backend:${GITHUB_SHA}"
-          docker build -t $IMAGE_TAG -f backend/Dockerfile .
-          docker push $IMAGE_TAG
-          echo "BACKEND_IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+          TAG="sha-${GITHUB_SHA}"
+          IMAGE="ghcr.io/robryst/dentistdev-backend:${TAG}"
+          docker build -t $IMAGE -f backend/Dockerfile .
+          docker push $IMAGE
+          echo "BACKEND_TAG=$TAG" >> $GITHUB_ENV
 
       - name: Build and push frontend image
-        id: frontend
         run: |
-          IMAGE_TAG="ghcr.io/robryst/dentistdev-frontend:${GITHUB_SHA}"
-          docker build -t $IMAGE_TAG -f frontend/Dockerfile .
-          docker push $IMAGE_TAG
-          echo "FRONTEND_IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+          TAG="sha-${GITHUB_SHA}"
+          IMAGE="ghcr.io/robryst/dentistdev-frontend:${TAG}"
+          docker build -t $IMAGE -f frontend/Dockerfile .
+          docker push $IMAGE
+          echo "FRONTEND_TAG=$TAG" >> $GITHUB_ENV
 
       - name: Update Kubernetes manifests with image tags
         run: |
-          # Replace the sha-PLACEHOLDER in backend.yaml with the actual backend tag
-          sed -i "s|sha-PLACEHOLDER|${{ env.BACKEND_IMAGE_TAG }}|g" k8s/backend.yaml
-          # Replace the sha-PLACEHOLDER in frontend.yaml with the actual frontend tag
-          sed -i "s|sha-PLACEHOLDER|${{ env.FRONTEND_IMAGE_TAG }}|g" k8s/frontend.yaml
+          sed -i "s|sha-PLACEHOLDER|${{ env.BACKEND_TAG }}|g" Platform-Repo/Clusters/dev/kustomization.yaml
+          sed -i "s|sha-PLACEHOLDER|${{ env.FRONTEND_TAG }}|g" Platform-Repo/Clusters/dev/kustomization.yaml
 
       - name: Sync with ArgoCD to deploy the changes
         run: |
