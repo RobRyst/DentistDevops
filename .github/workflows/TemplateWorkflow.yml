@@ -158,7 +158,6 @@ jobs:
             type=ref,event=branch
 
       - name: Build and push
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: docker/build-push-action@v6
         with:
           context: ${{ inputs.context }}
