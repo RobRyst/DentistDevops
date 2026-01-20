@@ -158,14 +158,14 @@ jobs:
             type=ref,event=branch
 
       - name: Build and push
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: docker/build-push-action@v6
         with:
           context: ${{ inputs.context }}
           file: ${{ inputs.dockerfile }}
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}:sha-${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}:${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
