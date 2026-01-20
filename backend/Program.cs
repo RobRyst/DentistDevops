@@ -110,7 +110,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-// ------------------ Controllers + Health + Swagger ------------------
+// ------------------ Controllers + Health + Swagger  ------------------
 builder.Services.AddControllers();
 builder.Services.AddHealthChecks();
 builder.Services.AddEndpointsApiExplorer();
