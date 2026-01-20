@@ -42,8 +42,3 @@ jobs:
         run: |
           sed -i "s|sha-PLACEHOLDER|${{ env.BACKEND_TAG }}|g" Platform-Repo/Clusters/dev/kustomization.yaml
           sed -i "s|sha-PLACEHOLDER|${{ env.FRONTEND_TAG }}|g" Platform-Repo/Clusters/dev/kustomization.yaml
-
-      - name: Sync with ArgoCD to deploy the changes
-        run: |
-          # Ensure ArgoCD CLI is installed and authenticated
-          argocd app sync dentistdev-dev --auth-token ${{ secrets.ARGOCD_AUTH_TOKEN }}
