@@ -15,6 +15,6 @@ patches:
 
 images:
   - name: ghcr.io/robryst/dentistdev-backend
-    newTag: sha-30b054aa2919fdea1ebc5a987343615ab7976fba
+    newTag: sha-efe53e6272c192b98c65afeb05dce5dae654f29a
   - name: ghcr.io/robryst/dentistdev-frontend
-    newTag: sha-30b054aa2919fdea1ebc5a987343615ab7976fba
+    newTag: sha-efe53e6272c192b98c65afeb05dce5dae654f29a
