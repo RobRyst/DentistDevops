@@ -10,3 +10,9 @@ resources:
   - frontend-deployment.yaml
   - frontend-service.yaml
   - ingress.yaml
+
+images:
+  - name: ghcr.io/robryst/dentistdev-backend
+    newTag: sha-${GITHUB_SHA}
+  - name: ghcr.io/robryst/dentistdev-frontend
+    newTag: sha-${GITHUB_SHA}
