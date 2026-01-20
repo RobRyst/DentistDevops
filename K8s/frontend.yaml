@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dentistdev-frontend
+  namespace: dentistdev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dentistdev-frontend
+  template:
+    metadata:
+      labels:
+        app: dentistdev-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: ghcr.io/robryst/dentistdev-frontend:sha-${GITHUB_SHA}
+          ports:
+            - containerPort: 80
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dentistdev-frontend
+  namespace: dentistdev
+spec:
+  selector:
+    app: dentistdev-frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
