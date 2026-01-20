@@ -33,8 +33,8 @@ jobs:
       - name: Build and push frontend image
         run: |
           TAG="sha-${GITHUB_SHA}"
-          IMAGE="ghcr.io/robryst/dentistdev-frontend:${TAG}"
-          docker build -t $IMAGE -f frontend/Dockerfile .
+          IMAGE="ghcr.io/${{ github.repository_owner }}/dentistdev-frontend:${TAG}"
+          docker build -t $IMAGE -f frontend/Dockerfile frontend
           docker push $IMAGE
           echo "FRONTEND_TAG=$TAG" >> $GITHUB_ENV
 
