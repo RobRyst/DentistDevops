@@ -26,7 +26,7 @@ jobs:
         run: |
           TAG="sha-${GITHUB_SHA}"
           IMAGE="ghcr.io/robryst/dentistdev-backend:${TAG}"
-          docker build -t $IMAGE -f backend/Dockerfile .
+          docker build -t $IMAGE -f frontend/Dockerfile frontend
           docker push $IMAGE
           echo "BACKEND_TAG=$TAG" >> $GITHUB_ENV
 
