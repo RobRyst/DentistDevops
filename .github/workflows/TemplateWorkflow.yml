@@ -157,42 +157,43 @@ jobs:
             type=sha
             type=ref,event=branch
 
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: ${{ inputs.context }}
-          file: ${{ inputs.dockerfile }}
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}:sha-${{ github.sha }}
-            ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}:main
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            - name: Build and push
+              if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+              uses: docker/build-push-action@v6
+              with:
+                context: ${{ inputs.context }}
+                file: ${{ inputs.dockerfile }}
+                push: true
+                tags: |
+                  ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}:sha-${{ github.sha }}
+                  ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}:main
+                cache-from: type=gha
+                cache-to: type=gha,mode=max
 
-      # ---------- Security scan (image) ----------
-      - name: Trivy image scan (SARIF)
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}:sha-${{ github.sha }}
-          format: sarif
-          output: trivy-image.sarif
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
+              # ---------- Security scan (image) ----------
+              - name: Trivy image scan (SARIF)
+                if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+                uses: aquasecurity/trivy-action@0.28.0
+                with:
+                  image-ref: ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}:sha-${{ github.sha }}
+                  format: sarif
+                  output: trivy-image.sarif
+                  severity: CRITICAL,HIGH
+                  ignore-unfixed: true
 
-      - name: Upload Trivy image to GitHub Security
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: trivy-image.sarif
+              - name: Upload Trivy image to GitHub Security
+                if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+                uses: github/codeql-action/upload-sarif@v3
+                with:
+                  sarif_file: trivy-image.sarif
 
-      # ---------- Smoke test (backend only) ----------
-      - name: Smoke test container (/healthz)
-        if: ${{ inputs.run_integration_smoke && inputs.service_name == 'backend' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-        run: |
-          docker run -d --rm --name smoke --network host \
-            -e ASPNETCORE_URLS=http://0.0.0.0:8080 \
-            ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}:sha-${{ github.sha }}
-          sleep 5
-          curl -fsS http://localhost:8080/healthz >/dev/null || (docker logs smoke && exit 1)
-          docker stop smoke
+              # ---------- Smoke test (backend only) ----------
+              - name: Smoke test container (/healthz)
+                if: ${{ inputs.run_integration_smoke && inputs.service_name == 'backend' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+                run: |
+                  docker run -d --rm --name smoke --network host \
+                    -e ASPNETCORE_URLS=http://0.0.0.0:8080 \
+                    ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}:sha-${{ github.sha }}
+                  sleep 5
+                  curl -fsS http://localhost:8080/healthz >/dev/null || (docker logs smoke && exit 1)
+                  docker stop smoke
