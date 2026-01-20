@@ -12,6 +12,7 @@ spec:
       labels:
         app: dentistdev-frontend
     spec:
+      serviceAccountName: dentistdev-sa
       containers:
         - name: frontend
           image: ghcr.io/robryst/dentistdev-frontend:sha-PLACEHOLDER

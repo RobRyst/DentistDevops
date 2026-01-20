@@ -5,6 +5,7 @@ namespace: dentistdev
 
 resources:
   - namespace.yaml
+  - serviceaccount.yaml
   - backend-deployment.yaml
   - backend-service.yaml
   - frontend-deployment.yaml
