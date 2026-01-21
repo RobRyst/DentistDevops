@@ -4,7 +4,6 @@ kind: Kustomization
 namespace: dentistdev
 
 resources:
-  - ../../apps/dentistdev/base
   - mysql-secret.yaml
   - mysql-pvc.yaml
   - mysql-service.yaml
