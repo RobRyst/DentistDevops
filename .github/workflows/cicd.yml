@@ -4,13 +4,19 @@ on:
   push:
     branches: ["main"]
 
+permissions:
+  contents: write
+  packages: write
+
 jobs:
-  build:
+  build-and-release:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -26,19 +32,28 @@ jobs:
         run: |
           TAG="sha-${GITHUB_SHA}"
           IMAGE="ghcr.io/robryst/dentistdev-backend:${TAG}"
-          docker build -t $IMAGE -f frontend/Dockerfile frontend
-          docker push $IMAGE
-          echo "BACKEND_TAG=$TAG" >> $GITHUB_ENV
+          docker build -t "$IMAGE" -f backend/Dockerfile .
+          docker push "$IMAGE"
 
       - name: Build and push frontend image
         run: |
           TAG="sha-${GITHUB_SHA}"
           IMAGE="ghcr.io/robryst/dentistdev-frontend:${TAG}"
-          docker build -t $IMAGE -f frontend/Dockerfile frontend
-          docker push $IMAGE
-          echo "FRONTEND_TAG=$TAG" >> $GITHUB_ENV
+          docker build -t "$IMAGE" -f frontend/Dockerfile frontend
+          docker push "$IMAGE"
 
-      - name: Update Kubernetes manifests with image tags
+      - name: Update dev overlay image tags (commit to git)
         run: |
-          sed -i "s|sha-PLACEHOLDER|${{ env.BACKEND_TAG }}|g" Platform-Repo/Clusters/dev/kustomization.yaml
-          sed -i "s|sha-PLACEHOLDER|${{ env.FRONTEND_TAG }}|g" Platform-Repo/Clusters/dev/kustomization.yaml
+          set -e
+          TAG="sha-${GITHUB_SHA}"
+          FILE="Platform-Repo/apps/dentistdev/overlays/dev/kustomization.yaml"
+
+          perl -0777 -i -pe "s|(name:\\s*ghcr\\.io/robryst/dentistdev-backend\\s*\\n\\s*newTag:\\s*).*$|\\$1$TAG|m" "$FILE"
+          perl -0777 -i -pe "s|(name:\\s*ghcr\\.io/robryst/dentistdev-frontend\\s*\\n\\s*newTag:\\s*).*$|\\$1$TAG|m" "$FILE"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add "$FILE"
+          git commit -m "chore(dev): bump images to ${TAG}" || echo "No changes to commit"
+          git push
