@@ -1,8 +1,15 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+namespace: dentistdev
+
 resources:
   - ../../apps/dentistdev/base
+  - mysql-secret.yaml
+  - mysql-pvc.yaml
+  - mysql-service.yaml
+  - mysql-statefulset.yaml
+  - dentistdev-secrets.yaml
 
 patches:
   - target:
@@ -15,6 +22,6 @@ patches:
 
 images:
   - name: ghcr.io/robryst/dentistdev-backend
-    newTag: sha-efe53e6272c192b98c65afeb05dce5dae654f29a
+    newTag: sha-PLACEHOLDER
   - name: ghcr.io/robryst/dentistdev-frontend
-    newTag: sha-efe53e6272c192b98c65afeb05dce5dae654f29a
+    newTag: sha-PLACEHOLDER
