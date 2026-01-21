@@ -15,7 +15,7 @@ spec:
       serviceAccountName: dentistdev-sa
       containers:
         - name: backend
-          image: ghcr.io/robryst/dentistdev-backend:sha-PLACEHOLDER
+          image: ghcr.io/robryst/dentistdev-backend:main
           ports:
             - containerPort: 8080
               name: http

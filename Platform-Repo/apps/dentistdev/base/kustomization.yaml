@@ -11,9 +11,3 @@ resources:
   - frontend-deployment.yaml
   - frontend-service.yaml
   - ingress.yaml
-
-images:
-  - name: ghcr.io/robryst/dentistdev-backend
-    newTag: sha-PLACEHOLDER
-  - name: ghcr.io/robryst/dentistdev-frontend
-    newTag: sha-PLACEHOLDER
