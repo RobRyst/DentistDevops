@@ -12,6 +12,7 @@ resources:
   - frontend-service.yaml
   - ingress.yaml
   - secret.yaml
+  - secret-dentistdev-secrets.yaml
   - ../../apps/dentistdev/base
   - mysql-secret.yaml
   - mysql-pvc.yaml
