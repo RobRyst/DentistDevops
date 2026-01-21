@@ -30,17 +30,19 @@ jobs:
 
       - name: Build and push backend image
         run: |
-          TAG="sha-${GITHUB_SHA}"
-          IMAGE="ghcr.io/robryst/dentistdev-backend:${TAG}"
-          docker build -t "$IMAGE" -f backend/Dockerfile .
-          docker push "$IMAGE"
+          SHA_TAG="sha-${GITHUB_SHA}"
+          IMAGE="ghcr.io/robryst/dentistdev-backend"
+          docker build -t "${IMAGE}:${SHA_TAG}" -t "${IMAGE}:main" -f backend/Dockerfile .
+          docker push "${IMAGE}:${SHA_TAG}"
+          docker push "${IMAGE}:main"
 
       - name: Build and push frontend image
         run: |
-          TAG="sha-${GITHUB_SHA}"
-          IMAGE="ghcr.io/robryst/dentistdev-frontend:${TAG}"
-          docker build -t "$IMAGE" -f frontend/Dockerfile frontend
-          docker push "$IMAGE"
+          SHA_TAG="sha-${GITHUB_SHA}"
+          IMAGE="ghcr.io/robryst/dentistdev-frontend"
+          docker build -t "${IMAGE}:${SHA_TAG}" -t "${IMAGE}:main" -f frontend/Dockerfile frontend
+          docker push "${IMAGE}:${SHA_TAG}"
+          docker push "${IMAGE}:main"
 
       - name: Update dev overlay image tags (commit to git)
         run: |
